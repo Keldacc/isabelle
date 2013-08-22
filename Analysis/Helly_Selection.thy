@@ -1,7 +1,9 @@
 theory Helly_Selection
-imports Diagonal_Subsequence Library_Misc
+imports Diagonal_Subsequence Conditionally_Complete_Lattice Library_Misc
 
 begin
+
+(** Perhaps a useful theorem, but is perhaps superceded by conditionally complete lattices.
 
 lemma real_bdd_below_inf:
   fixes A :: "real set"
@@ -29,6 +31,8 @@ proof (rule ccontr)
   moreover have "r < m" using 3 4 by simp
   ultimately show False using assms not_le by auto
 qed
+
+**)
 
 (** Consider developing notions of has_sup, has_inf for arbitrary lattices, and the notion of a
 conditionally complete lattice (one where every set bdd below has an inf, and every set bdd above
