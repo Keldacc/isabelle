@@ -5,22 +5,59 @@ imports Complex_Main
 begin
 
 context ord
-  begin
+begin
 
-  abbreviation "bdd_above A \<equiv> \<exists>M. \<forall>x \<in> A. less_eq x M"
-  abbreviation "bdd_below A \<equiv> \<exists>m. \<forall>x \<in> A. less_eq m x"
+definition "bdd_above A \<equiv> \<exists>M. \<forall>x \<in> A. x \<le> M"
+definition "bdd_below A \<equiv> \<exists>m. \<forall>x \<in> A. m \<le> x"
 
-  end
+end
 
 context order
-  begin
+begin
 
-  abbreviation "is_Sup s A \<equiv> (\<forall>x \<in> A. x \<le> s) \<and> (\<forall>M. (\<forall>x \<in> A. x \<le> M) \<longrightarrow> s \<le> M)"
-  abbreviation "is_Inf i A \<equiv> (\<forall>x \<in> A. i \<le> x) \<and> (\<forall>m. (\<forall>x \<in> A. m \<le> x) \<longrightarrow> m \<le> i)"
-  abbreviation "has_Sup A \<equiv> \<exists>s. is_Sup s A"
-  abbreviation "has_Inf A \<equiv> \<exists>i. is_Inf i A"
+abbreviation "is_Sup s A \<equiv> (\<forall>x \<in> A. x \<le> s) \<and> (\<forall>M. (\<forall>x \<in> A. x \<le> M) \<longrightarrow> s \<le> M)"
+abbreviation "is_Inf i A \<equiv> (\<forall>x \<in> A. i \<le> x) \<and> (\<forall>m. (\<forall>x \<in> A. m \<le> x) \<longrightarrow> m \<le> i)"
+abbreviation "has_Sup A \<equiv> \<exists>s. is_Sup s A"
+abbreviation "has_Inf A \<equiv> \<exists>i. is_Inf i A"
 
-  end
+end
+
+context lattice
+begin
+
+lemma bdd_above_insert [simp]: "bdd_above (insert a A) = bdd_above A"
+unfolding bdd_above_def apply auto
+apply (rule_tac x = "sup a M" in exI)
+by (auto intro: le_supI2 sup_ge1)
+
+lemma bdd_below_insert [simp]: "bdd_below (insert a A) = bdd_below A"
+unfolding bdd_below_def apply auto
+apply (rule_tac x = "inf a m" in exI)
+by (auto intro: le_infI2 inf_le1)
+
+lemma bdd_above_Un [simp]: "bdd_above (A \<union> B) = (bdd_above A \<and> bdd_above B)"
+proof
+  assume "bdd_above (A \<union> B)"
+  thus "bdd_above A \<and> bdd_above B" unfolding bdd_above_def by auto
+next
+  assume "bdd_above A \<and> bdd_above B"
+  then obtain a b where "\<forall>x\<in>A. x \<le> a" "\<forall>x\<in>B. x \<le> b" unfolding bdd_above_def by auto
+  hence "\<forall>x \<in> A \<union> B. x \<le> sup a b" by (auto intro: Un_iff le_supI1 le_supI2)
+  thus "bdd_above (A \<union> B)" unfolding bdd_above_def ..
+qed
+
+lemma bdd_below_Un [simp]: "bdd_below (A \<union> B) = (bdd_below A \<and> bdd_below B)"
+proof
+  assume "bdd_below (A \<union> B)"
+  thus "bdd_below A \<and> bdd_below B" unfolding bdd_below_def by auto
+next
+  assume "bdd_below A \<and> bdd_below B"
+  then obtain a b where "\<forall>x\<in>A. a \<le> x" "\<forall>x\<in>B. b \<le> x" unfolding bdd_below_def by auto
+  hence "\<forall>x \<in> A \<union> B. inf a b \<le> x" by (auto intro: Un_iff le_infI1 le_infI2)
+  thus "bdd_below (A \<union> B)" unfolding bdd_below_def ..
+qed
+
+end
 
 (* Why does trying to use a locale here result in superfluous types? *)
 class conditionally_complete_lattice = lattice +
@@ -92,7 +129,7 @@ lemma Sup_least:
   assumes "A \<noteq> {}" and M_upper: "\<And>x. x \<in> A \<Longrightarrow> x \<le> M"
   shows "Sup A \<le> M"
 proof -
-  from M_upper have "bdd_above A" by auto
+  from M_upper have "bdd_above A" using bdd_above_def by auto
   with assms bdd_nonempty_Sup Sup_is_Sup show ?thesis by auto
 qed
     
@@ -111,7 +148,7 @@ lemma Inf_greatest:
   assumes "A \<noteq> {}" and m_lower: "\<And>x. x \<in> A \<Longrightarrow> m \<le> x"
   shows "m \<le> Inf A"
 proof -
-  from m_lower have "bdd_below A" by auto
+  from m_lower have "bdd_below A" using bdd_below_def by auto
   with assms bdd_nonempty_Inf Inf_is_Inf show ?thesis by auto
 qed
 
@@ -137,7 +174,9 @@ lemma dual_conditionally_complete_lattice:
   "class.conditionally_complete_lattice sup (op \<ge>) (op >) inf"
   apply (unfold_locales)
   apply (auto intro: Sup_is_Sup Sup_upper Sup_least Inf_is_Inf Inf_lower Inf_greatest)
-  by (metis less_le_not_le)
+  unfolding bdd_above_def bdd_below_def apply (metis less_le)
+  apply (metis (lifting) bdd_below_def bdd_nonempty_Inf empty_iff ord.bdd_above_def)
+  by (metis (lifting) Sup_least Sup_upper bdd_above_def empty_iff ord.bdd_below_def)
 
 definition InfI :: "'b set \<Rightarrow> ('b \<Rightarrow> 'a) \<Rightarrow> 'a" where "InfI A f = \<Sqinter>(f ` A)"
 
@@ -222,9 +261,12 @@ lemma Inf_insert [simp]:
   fixes A a
   assumes "A \<noteq> {}" and "bdd_below A"
   shows "\<Sqinter>insert a A = a \<sqinter> \<Sqinter>A"
-by (smt Inf_is_Inf antisym assms bdd_nonempty_Inf inf.commute inf.idem inf_commute inf_greatest
-  inf_idem inf_le1 inf_le2 insertE insertI1 insertI2 insert_not_empty le_Inf_iff le_infI
-  ord_le_eq_trans)
+apply (rule antisym)
+prefer 2 apply (rule Inf_greatest, auto)
+apply (rule le_infI2)
+apply (rule Inf_lower)
+using assms apply auto [2]
+by (auto simp add: assms le_Inf_iff Inf_lower)
 
 lemma InfI_insert:
   fixes A f a
@@ -232,30 +274,24 @@ lemma InfI_insert:
   shows "InfI (insert a A) f = f a \<sqinter> InfI A f"
 by (smt InfI_def Inf_insert assms empty_is_image image_insert)
 
-(*
 lemma Sup_insert [simp]:
   fixes A a
   assumes "A \<noteq> {}" and "bdd_above A"
   shows "\<Squnion>insert a A = a \<squnion> \<Squnion>A"
-sorry
-*)
+apply (rule antisym)
+apply (rule Sup_least, auto)
+apply (rule le_supI2)
+apply (rule Sup_upper)
+using assms apply auto [2]
+by (auto simp add: assms Sup_le_iff Sup_upper)
 
-(*
-proof (cases "\<forall>x\<in>A. x \<le> a")
-  assume a_upper: "\<forall>x\<in>A. x \<le> a"
-  hence "\<Squnion>A \<le> a" using Sup_least assms by auto
-  hence sup_a: "a \<squnion> \<Squnion>A = a" using sup_absorb1 by simp
-  have "\<forall>x \<in> (insert a A). x \<le> a" using a_upper by auto
-  moreover have "\<And>M. (\<forall>x \<in> (insert a A). x \<le> M) \<Longrightarrow> a \<le> M" by auto
-  ultimately have "\<Squnion>insert a A = a" using Sup_unique by (metis (lifting) eq_refl insert_iff)
-  thus ?thesis using sup_a by simp
-next
-  assume "\<not>(\<forall>x\<in>A. x \<le> a)" hence a_not_upper: "\<exists>x\<in>A. \<not>(x \<le> a)" by simp
-*)
+lemma SupR_insert: 
+  fixes A a f
+  assumes "A \<noteq> {}" and "bdd_above (f ` A)" 
+  shows "SupR (insert a A) f = f a \<squnion> SupR A f"
+by (smt SupR_def Sup_insert assms empty_is_image image_insert)
 
-(**** More theorems to transfer from Complete_Lattices.thy.
-lemma SupR_insert: "(\<Squnion>x\<in>insert a A. f x) = f a \<squnion> SUPR A f"
-  by (simp add: SUP_def)
+(**** More theorems to transfer from COmplete_Lattices.thy.
 
 lemma INF_image [simp]: "(\<Sqinter>x\<in>f`A. g x) = (\<Sqinter>x\<in>A. g (f x))"
   by (simp add: INF_def image_image)
@@ -268,12 +304,6 @@ lemma Inf_Sup: "\<Sqinter>A = \<Squnion>{b. \<forall>a \<in> A. b \<sqsubseteq> 
 
 lemma Sup_Inf:  "\<Squnion>A = \<Sqinter>{b. \<forall>a \<in> A. a \<sqsubseteq> b}"
   by (auto intro: antisym Inf_lower Inf_greatest Sup_upper Sup_least)
-
-lemma Inf_superset_mono: "B \<subseteq> A \<Longrightarrow> \<Sqinter>A \<sqsubseteq> \<Sqinter>B"
-  by (auto intro: Inf_greatest Inf_lower)
-
-lemma Sup_subset_mono: "A \<subseteq> B \<Longrightarrow> \<Squnion>A \<sqsubseteq> \<Squnion>B"
-  by (auto intro: Sup_least Sup_upper)
 
 lemma INF_cong:
   "A = B \<Longrightarrow> (\<And>x. x \<in> B \<Longrightarrow> C x = D x) \<Longrightarrow> (\<Sqinter>x\<in>A. C x) = (\<Sqinter>x\<in>B. D x)"
@@ -378,11 +408,23 @@ instantiation real :: conditionally_complete_lattice
 begin
 
 instance proof
-  fix A :: "real set" assume nonempty: "A \<noteq> {}" and "bdd_above A"
-  thus "has_Sup A" using complete_real by auto
+  fix A :: "real set" assume "A \<noteq> {}" and "bdd_above A"
+  thus "has_Sup A" unfolding bdd_above_def using complete_real by auto
 next
-  fix A :: "real set" assume nonempty: "A \<noteq> {}" and "bdd_below A"
-  thus "has_Inf A" sorry
+  fix A :: "real set" assume nonempty: "A \<noteq> {}" and bdd: "bdd_below A"
+  have "has_Sup (uminus ` A)"
+  proof -
+    from bdd have "bdd_above (uminus ` A)"
+      unfolding bdd_below_def bdd_above_def by (metis image_iff le_minus_iff minus_minus)
+    (* Better way to use result of previous assertion in next-separated proof? *)
+    thus ?thesis unfolding bdd_above_def using nonempty bdd complete_real[of "uminus ` A"] by auto
+  qed
+  thus "has_Inf A"
+  proof -
+    have "is_Inf (Inf_class.Inf A) A" using nonempty bdd
+      by (metis (full_types) Inf_ge SupInf.Inf_lower bdd_below_def setgeI)
+    thus ?thesis by auto
+  qed
 qed
 
 end
